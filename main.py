@@ -72,19 +72,19 @@ FIRST_STROKES = [s for s in FIRST_STROKES if s]
 LAST_STROKES = os.getenv("LAST_STROKES", "").replace("\\n", "\n").split(";")
 LAST_STROKES = [s for s in LAST_STROKES if s]
 log('Переменные окружения успешно инициализированы')
-base_path = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.abspath(".")
+
+# На VPS используем абсолютные пути или пути относительно рабочей директории скрипта
+base_path = os.path.dirname(os.path.abspath(__file__))
 
 # Пути к файлам
 LAST_PHOTO_PATH = os.path.join(base_path, "lastPhoto.jpg")
 DEFAULT_BG_PATH = os.path.join(base_path, "background.jpg")
-log('Пути к файлам установлены')
+log(f'Пути к файлам установлены (базовый путь: {base_path})')
 
 bot = telebot.TeleBot(TOKEN)
 user_images = {}
 user_states = {}
 user_backgrounds = {}
-
-
 
 def login():
     global insta, PASSWORD
@@ -213,13 +213,12 @@ def handle_text(msg):
 
     match state['step']:
         case 'cprice':
-            # Пользователь ввёл себестоимость в CNY
             try:
                 cny = float(text.replace(",", "."))
             except Exception:
                 bot.send_message(chat_id, "❌ Некорректная себестоимость. Введите число, например: 12.5")
                 return
-            price_in_uzs = cny * CYN  # пример курса
+            price_in_uzs = cny * CYN
             suggested_price = round((price_in_uzs * 1.5) + 50000, -3)
             bot.send_message(chat_id, f"💰 Себестоимость в юанях: ~{text} CNY\n"
                                       f"💰 Себестоимость в суммах: {format_price(price_in_uzs)} UZS\n"
@@ -257,7 +256,6 @@ def handle_text(msg):
             bot.send_message(chat_id, "💰 Цена в суммах:")
             log(f"{chat_id}: Введена ссылка на товар: {text}")
         case 'price':
-            # Парсим и сохраняем цену в UZS как int
             amount = parse_int_amount(text)
             if amount == 0:
                 bot.send_message(chat_id, "❌ Некорректная цена. Введите число, например: 120000")
@@ -269,7 +267,7 @@ def handle_text(msg):
         case 'withcargo':
             if text not in ["✅ Да", "❌ Нет"]:
                 return bot.send_message(chat_id, "❌ Пожалуйста, выберите '✅ Да' или '❌ Нет'.")
-            state['withcargo'] = (text == "✅ Да")  # True/False
+            state['withcargo'] = (text == "✅ Да")
             log(f"{chat_id}: Введён статус с доставкой: {text}")
             state['step'] = 'name'
             bot.send_message(chat_id, "📝 Название:")
@@ -281,7 +279,7 @@ def handle_text(msg):
         case 'availability':
             if text not in ["✅ Да", "❌ Нет"]:
                 return bot.send_message(chat_id, "❌ Пожалуйста, выберите '✅ Да' или '❌ Нет'.")
-            state['availability'] = (text == "✅ Да")  # True/False
+            state['availability'] = (text == "✅ Да")
             bot.send_message(chat_id, "Удалить фон с фотографий?", reply_markup=types.ReplyKeyboardMarkup(resize_keyboard=True).add("✅ Да", "❌ Нет"))
             state['step'] = 'bg'
             log(f"{chat_id}: Введён статус наличия: {text}. Переход к этапу обработки фона.")
@@ -326,8 +324,6 @@ def handle_text(msg):
 
                 state['images'] = processed_images
 
-            # формируем caption аккуратно — добавляем блоки только если они есть
-            # формируем caption аккуратно — добавляем блоки только если они есть
             caption_parts = []
             if FIRST_STROKES:
                 caption_parts.append("\n".join(FIRST_STROKES))
@@ -353,7 +349,7 @@ def handle_text(msg):
             if state.get('color', '-') != '-':
                 caption_parts.append(f"🎨 <b>Цвет:</b> {state.get('color', '—')}")
 
-            caption_parts.append("")  # пустая строка перед линией доставки
+            caption_parts.append("")
 
             if not state.get('availability'):
                 caption_parts.append(f"🚚 <b>Доставка:</b> <i>{DELIVERY}</i>")
@@ -361,7 +357,6 @@ def handle_text(msg):
             if LAST_STROKES:
                 caption_parts.append("\n".join(LAST_STROKES))
 
-            # удаляем пустые/ложные элементы и объединяем
             caption = "\n".join([p for p in caption_parts if p])
             state['caption'] = caption
 
@@ -383,7 +378,6 @@ def handle_text(msg):
                     media_group.append(media)
 
                 message = bot.send_media_group(CHANNEL, media_group)
-                # message — список сообщений, берем id первого
                 post_link = f"https://t.me/{CHANNEL[1:]}/{message[0].message_id}"
                 state['tlink'] = post_link
 
@@ -391,46 +385,30 @@ def handle_text(msg):
                 if insta:
                     try:
                         photo_paths = []
-                        # создаём временные файлы
                         for i, img in enumerate(state['images']):
                             img.seek(0)
-                            path = f"temp{i}.jpg"
+                            path = os.path.join(base_path, f"temp{i}.jpg")
                             with open(path, "wb") as f:
                                 f.write(img.read())
                             photo_paths.append(path)
 
-                        # добавляем бренд-фото, если есть
                         if os.path.exists(LAST_PHOTO_PATH):
                             photo_paths.append(LAST_PHOTO_PATH)
                             log("✅ Бренд-фото добавлено")
                         else:
                             log("⚠️ Бренд-фото не найден")
 
-                        # Чистый текст для Instagram (удаляем HTML)
-                        
-
                         caption_for_insta = state['caption']
-
-                        # убираем базовые теги форматирования
                         for tag in ["b", "i", "code", "u", "s", "strong", "em"]:
                             caption_for_insta = caption_for_insta.replace(f"<{tag}>", "").replace(f"</{tag}>", "")
 
-                        # убираем все <a ...>...</a>, оставляя только текст
                         caption_for_insta = re.sub(r"<a [^>]*>(.*?)</a>", r"\1", caption_for_insta)
-
-                        # убираем картинки, видео и другие "пустые" теги (<br>, <img>, <hr> и т.д.)
                         caption_for_insta = re.sub(r"<(br|hr|img|video|source)[^>]*>", "", caption_for_insta)
-
-                        # если остались любые другие теги <...>, убираем их целиком
                         caption_for_insta = re.sub(r"<[^>]+>", "", caption_for_insta)
 
-
-
-                        # Защита: если photo_paths пуст (на всякий случай)
                         if not photo_paths:
                             raise RuntimeError("Нет изображений для отправки в Instagram")
 
-                        # Отправка: одно фото -> photo_upload, несколько -> album_upload
                         if len(photo_paths) == 1:
                             insta.photo_upload(photo_paths[0], caption_for_insta)
                             log("✅ Фото опубликовано как пост в Instagram")
@@ -441,18 +419,14 @@ def handle_text(msg):
                     except Exception as e:
                         log(f"❌ Ошибка Instagram: {e}")
                     finally:
-                        # всегда удаляем временные temp*.jpg (не трогаем lastPhoto.jpg)
-                        for path in list(photo_paths):
-                            if path.startswith("temp") and os.path.exists(path):
+                        for path in photo_paths:
+                            if "temp" in os.path.basename(path) and os.path.exists(path):
                                 try:
                                     os.remove(path)
                                     log(f"🗑 Удалён временный файл: {path}")
                                 except Exception as ex:
                                     log(f"⚠️ Не удалось удалить {path}: {ex}")
 
-
-
-                # Формируем отчёт для группы
                 report_caption = [
                     f"🟢 Новая публикация! ID: {state['tlink'].split('/')[-1]}",
                     f"🔗 Ссылка на пост: {state.get('tlink', '—')}",
@@ -460,7 +434,7 @@ def handle_text(msg):
                     f"💸 Цена: {format_price(state.get('price', 0))} UZS",
                     f"Себестоимость: {format_price(state.get('cprice', 0)/CYN) if state.get('cprice') else '—'} CNY (~{format_price(state.get('cprice', 0))} UZS)",
                     f"🏷 Категория: {state.get('category', '—')}",
-                    f"👔 Бренд: {state.get('brand', '—')}",
+                    f"👔 Бренл: {state.get('brand', '—')}",
                     f"📏 Размеры: {state.get('size', '—')}",
                     f"🎨 Цвет: {state.get('color', '—')}",
                     f"🔗 Ссылка на товар: {state.get('plink', '—')}",
@@ -477,5 +451,4 @@ def handle_text(msg):
             bot.send_message(chat_id, "✅ Готово!")
             log(f"{chat_id}: Публикация завершена. Данные сохранены в группе.")
 
-bot.polling(none_stop=True)
-
+bot.infinity_polling()
