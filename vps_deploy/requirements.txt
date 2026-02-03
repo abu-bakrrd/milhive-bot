@@ -1,0 +1,5 @@
+pyTelegramBotAPI
+rembg
+Pillow
+instagrapi
+python-dotenv

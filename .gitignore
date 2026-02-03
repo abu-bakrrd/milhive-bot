@@ -1,0 +1,15 @@
+.env
+__pycache__/
+*.pyc
+venv/
+.tox/
+.pytest_cache/
+.vscode/
+.idea/
+*.log
+temp*.jpg
+lastPhoto.jpg
+background.jpg
+store.exe
+vps_deploy/lastPhoto.jpg
+vps_deploy/background.jpg

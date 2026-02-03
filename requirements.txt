@@ -1,0 +1,10 @@
+telebot
+rembg
+Pillow
+gspread
+oauth2client
+instagrapi
+cloudinary
+qrcode
+flask
+flask_sqlalchemy

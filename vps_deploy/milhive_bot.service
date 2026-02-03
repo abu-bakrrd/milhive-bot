@@ -1,0 +1,13 @@
+[Unit]
+Description=Milhive Bot Service
+After=network.target
+
+[Service]
+User=root
+WorkingDirectory=/root/milhive_bot
+ExecStart=/root/milhive_bot/venv/bin/python /root/milhive_bot/main.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
